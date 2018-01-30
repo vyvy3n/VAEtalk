@@ -1,5 +1,6 @@
-'''This script demonstrates how to build a variational autoencoder with Keras.
-Reference: "Auto-Encoding Variational Bayes" https://arxiv.org/abs/1312.6114
+'''
+Description: to build a variational autoencoder with Keras.
+Reference  : "Auto-Encoding Variational Bayes" https://arxiv.org/abs/1312.6114
 '''
 import numpy as np
 import matplotlib.pyplot as plt
@@ -28,125 +29,170 @@ y_test  = mnist.test.labels
 
 #%% Build VAE
 
-np.random.seed(0)  # for reproducibility
-
-batch_size = 100 
-n = 784
-m = 2
-hidden_dim = 256
-epochs = 50
+np.random.seed(0)  #for reproducibility
+            
+dim_x       = 784
+dim_latent  = 2
+dim_hidden  = 256
+batch_size  = 100 
+epochs      = 50
+decay       = 1e-4 # L2 regularization
 epsilon_std = 1.0
-use_loss = 'xent' # 'mse' or 'xent'
-
-decay = 1e-4 # weight decay, a.k. l2 regularization
-use_bias = True
+use_loss    = 'xent' # 'mse'(mean square error) or 'xent'(cross entropy)
+use_bias    = True
 
 ## Encoder
-x = Input(batch_shape=(batch_size, n))
-h_encoded = Dense(hidden_dim, kernel_regularizer=l2(decay), bias_regularizer=l2(decay), use_bias=use_bias, activation='tanh')(x)
-z_mean = Dense(m, kernel_regularizer=l2(decay), bias_regularizer=l2(decay), use_bias=use_bias)(h_encoded)
-z_log_var = Dense(m, kernel_regularizer=l2(decay), bias_regularizer=l2(decay), use_bias=use_bias)(h_encoded)
+x = Input(batch_shape=(batch_size, dim_x))
 
+h_encoded = Dense(dim_hidden, 
+                  kernel_regularizer=l2(decay), bias_regularizer=l2(decay), 
+                  use_bias=use_bias, activation='tanh')(x)
+z_mean    = Dense(dim_latent, 
+                  kernel_regularizer=l2(decay), bias_regularizer=l2(decay), 
+                  use_bias=use_bias)(h_encoded)
+z_log_var = Dense(dim_latent, 
+                  kernel_regularizer=l2(decay), bias_regularizer=l2(decay), 
+                  use_bias=use_bias)(h_encoded)
 
 ## Sampler
 def sampling(args):
     z_mean, z_log_var = args
-    epsilon = K.random_normal_variable(shape=(batch_size, m), mean=0.,
+    epsilon = K.random_normal_variable(shape=(batch_size, dim_latent), mean=0.,
                                        scale=epsilon_std)
     return z_mean + K.exp(z_log_var / 2) * epsilon
 
-z = Lambda(sampling, output_shape=(m,))([z_mean, z_log_var])
-
-# we instantiate these layers separately so as to reuse them later
-decoder_h = Dense(hidden_dim, kernel_regularizer=l2(decay), bias_regularizer=l2(decay), use_bias=use_bias, activation='tanh')
-decoder_mean = Dense(n, kernel_regularizer=l2(decay), bias_regularizer=l2(decay), use_bias=use_bias, activation='sigmoid')
+z = Lambda(sampling, output_shape=(dim_latent,))([z_mean, z_log_var])
 
 ## Decoder
-h_decoded = decoder_h(z)
-x_hat = decoder_mean(h_decoded)
+decoder_hidden = Dense(dim_hidden, 
+                     kernel_regularizer=l2(decay), bias_regularizer=l2(decay), 
+                     use_bias=use_bias, activation='tanh')
+decoder_output = Dense(dim_x, 
+                     kernel_regularizer=l2(decay), bias_regularizer=l2(decay), 
+                     use_bias=use_bias, activation='sigmoid')
+x_hat          = decoder_output(decoder_hidden(z))
 
-
-## loss
-def vae_loss(x, x_hat):
-    kl_loss = - 0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
-    xent_loss = n * objectives.binary_crossentropy(x, x_hat)
-    mse_loss = n * objectives.mse(x, x_hat) 
+                
+## Loss
+def loss(x, x_hat):
+    loss_kl   = - 0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
+    loss_xent = dim_x * objectives.binary_crossentropy(x, x_hat)
+    loss_mse  = dim_x * objectives.mse(x, x_hat) 
     if use_loss == 'xent':
-        return xent_loss + kl_loss
+        return loss_kl + loss_xent
     elif use_loss == 'mse':
-        return mse_loss + kl_loss
+        return loss_kl + loss_mse
     else:
-        raise Expception('Nonknow loss!')
+        raise Exception('Undefined Loss: %s'%(use_loss))
 
+## Define Model
 vae = Model(x, x_hat)
-vae.compile(optimizer='rmsprop', loss=vae_loss)
+vae.compile(optimizer='rmsprop', loss=loss)
 
 #%% train the VAE on MNIST digits
 
+#(optional setting)
+from keras.callbacks import EarlyStopping
+early_stopping = EarlyStopping(monitor='val_loss', patience=2)
 
 vae.fit(x_train, x_train,
         shuffle=True,
         epochs=epochs,
         batch_size=batch_size,
-        validation_data=(x_test, x_test))
+        validation_data=(x_test, x_test),#validation_split=0.2,
+        callbacks=[early_stopping])
+#print(vae.history.history.keys())
+logs = vae.history.history['val_loss']
 
-##----------Visualization----------##
-# build a model to project inputs on the latent space
+#%% Visualization: Latent Space
+
+# build a model to encode inputs(x) to the latent space(z)
 encoder = Model(x, z_mean)
-
 # display a 2D plot of the digit classes in the latent space
-x_test_encoded = encoder.predict(x_test, batch_size=batch_size)
-fig = plt.figure(figsize=(6, 6))
-plt.scatter(x_test_encoded[:, 0], x_test_encoded[:, 1], c=y_test)
-plt.colorbar()
-plt.show()
-fig.savefig('z_{}.png'.format(use_loss))
+z_encoded_from_x = encoder.predict(x_test, batch_size=batch_size)
 
-# build a digit generator that can sample from the learned distribution
-decoder_input = Input(shape=(m,))
-_h_decoded = decoder_h(decoder_input)
-_x_hat = decoder_mean(_h_decoded)
-generator = Model(decoder_input, _x_hat)
+if dim_latent == 2:
+    fig = plt.figure()#fig = plt.figure(figsize=(8, 6))
+    fig.scatter(z_encoded_from_x[:, 0], 
+                      z_encoded_from_x[:, 1], 
+                      z_encoded_from_x[:, 2], c=y_test)
+    fig.colorbar()
+    fig.show()
+    fig.savefig('z_{}_latent_{}_ep_{}.png'.format(use_loss,dim_latent))
 
-# display a 2D manifold of the digits
-n = 15  # figure with 15x15 digits
-digit_size = 28
-figure = np.zeros((digit_size * n, digit_size * n))
-# linearly spaced coordinates on the unit square were transformed through the inverse CDF (ppf) of the Gaussian
-# to produce values of the latent variables z, since the prior of the latent space is Gaussian
-grid_x = norm.ppf(np.linspace(0.05, 0.95, n))
-grid_y = norm.ppf(np.linspace(0.05, 0.95, n))
+if dim_latent == 3:
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure()#fig = plt.figure(figsize=(8, 6))
+    axs = fig.add_subplot(111, projection='3d')
+    pic = axs.scatter(z_encoded_from_x[:, 0], 
+                      z_encoded_from_x[:, 1], 
+                      z_encoded_from_x[:, 2], c=y_test)
+    fig.colorbar(pic)
+    fig.show()
+    fig.savefig('z_{}_latent_{}_ep_{}.png'.format(use_loss,dim_latent,epochs))
 
-for i, yi in enumerate(grid_x):
-    for j, xi in enumerate(grid_y):
-        z_sample = np.array([[xi, yi]])
-        x_decoded = generator.predict(z_sample)
-        digit = x_decoded[0].reshape(digit_size, digit_size)
-        figure[i * digit_size: (i + 1) * digit_size,
-               j * digit_size: (j + 1) * digit_size] = digit
+#%% Visualization: 2D Digits Manifold
 
-fig = plt.figure(figsize=(10, 10))
-plt.imshow(figure, cmap='Greys_r')
-plt.show()
-fig.savefig('x_{}.png'.format(use_loss))
+if dim_latent == 2:
+    
+    ## build a digit generator that can sample from the learned distribution
+    z_sampled = Input(shape=(dim_latent,))
+    x_decoded = decoder_output(decoder_hidden(z_sampled))
+    generator = Model(z_sampled, x_decoded)
+    
+    # display a 2D manifold of the digits
+    n = 10  # figure with 15x15 digits
+    digit_size = 28
+    figure = np.zeros((digit_size * n, digit_size * n))
+    # linearly spaced coordinates on the unit square were transformed through the 
+    # inverse CDF (ppf) of the Gaussian to produce values of the latent variables 
+    # z, since the prior of the latent space is Gaussian.
+    grid_x = norm.ppf(np.linspace(0.05, 0.95, n))
+    grid_y = norm.ppf(np.linspace(0.05, 0.95, n))
+    
+    for i, yi in enumerate(grid_x):
+        for j, xi in enumerate(grid_y):
+            z_sample = np.array([[xi, yi]])
+            x_decode = generator.predict(z_sample)
+            figure[i * digit_size: (i + 1) * digit_size,
+                   j * digit_size: (j + 1) * digit_size] = \
+                   x_decode[0].reshape(digit_size, digit_size)
+    
+    #for i, yi in enumerate(grid_x):
+    #    for j, xi in enumerate(grid_y):
+    #        for k, zi in enumerate(grid_x):
+    #            for u, ui in enumerate(grid_x):
+    #                z_sample = np.array([[xi, yi, zi, ui]])
+    #                x_decode = generator.predict(z_sample)
+    #                figure[i * digit_size: (i + 1) * digit_size,
+    #                       j * digit_size: (j + 1) * digit_size] = \
+    #                       x_decode[0].reshape(digit_size, digit_size)
+                   
+    fig = plt.figure(figsize=(10, 10))
+    plt.imshow(figure, cmap='Greys_r')
+    plt.show()
+    fig.savefig('x_{}_latent_{}_ep_{}_n_{}.png'.format(use_loss,dim_latent,n,epochs))
 
-# data imputation
-figure = np.zeros((digit_size * 3, digit_size * n))
-x = x_test[:batch_size,:]
-x_corupted = np.copy(x)
-x_corupted[:, 300:400] = 0
-x_encoded = vae.predict(x_corupted, batch_size=batch_size).reshape((-1, digit_size, digit_size))
-x = x.reshape((-1, digit_size, digit_size))
-x_corupted = x_corupted.reshape((-1, digit_size, digit_size))
-for i in range(n):
-    xi = x[i]
-    xi_c = x_corupted[i]
-    xi_e = x_encoded[i]
-    figure[:digit_size, i * digit_size:(i+1)*digit_size] = xi
-    figure[digit_size:2 * digit_size, i * digit_size:(i+1)*digit_size] = xi_c
-    figure[2 * digit_size:, i * digit_size:(i+1)*digit_size] = xi_e
+#%% Visualization: Data Imputation
 
-fig = plt.figure(figsize=(10, 10))
-plt.imshow(figure, cmap='Greys_r')
-plt.show()
-fig.savefig('i_{}.png'.format(use_loss))
+if dim_latent == 2:
+
+    figure = np.zeros((digit_size * 3, digit_size * n))
+    x = x_test[:batch_size,:]
+    x_corupted = np.copy(x)
+    x_corupted[:, 300:400] = 0
+    x_encoded = vae.predict(x_corupted, batch_size=batch_size).reshape((-1, digit_size, digit_size))
+    x = x.reshape((-1, digit_size, digit_size))
+    x_corupted = x_corupted.reshape((-1, digit_size, digit_size))
+    for i in range(n):
+        xi = x[i]
+        xi_c = x_corupted[i]
+        xi_e = x_encoded[i]
+        figure[:digit_size, i * digit_size:(i+1)*digit_size] = xi
+        figure[digit_size:2 * digit_size, i * digit_size:(i+1)*digit_size] = xi_c
+        figure[2 * digit_size:, i * digit_size:(i+1)*digit_size] = xi_e
+    
+    fig = plt.figure(figsize=(10, 10))
+    plt.imshow(figure, cmap='Greys_r')
+    plt.show()
+    fig.savefig('i_{}_latent_{}_ep_{}_n_{}.png'.format(use_loss,dim_latent,n,epochs))
