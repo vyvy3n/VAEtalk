@@ -35,7 +35,7 @@ dim_x       = 784
 dim_latent  = 2 
 dim_hidden  = 256
 batch_size  = 100 
-epochs      = 50
+epochs      = 5
 decay       = 1e-4 # L2 regularization
 epsilon_std = 1.0
 use_loss    = 'xent' # 'mse' or 'xent'
@@ -112,16 +112,16 @@ fig.savefig('z_{}.png'.format(use_loss))
 #%% Visualization: 
 
 ## build a digit generator that can sample from the learned distribution
-decoder_input = Input(shape=(dim_latent,))
-_x_hat = decoder_output(decoder_hidden(decoder_input))
-generator = Model(decoder_input, _x_hat)
+z_sampled = Input(shape=(dim_latent,))
+x_decoded = decoder_output(decoder_hidden(z_sampled))
+generator = Model(z_sampled, x_decoded)
 
 
 #%%
 # display a 2D manifold of the digits
 n = 15  # figure with 15x15 digits
-digit_size = 28
-figure = np.zeros((digit_size * n, digit_size * n))
+m = 28
+figure = np.zeros((m * n, m * n))
 # linearly spaced coordinates on the unit square were transformed through the inverse CDF (ppf) of the Gaussian
 # to produce values of the latent variables z, since the prior of the latent space is Gaussian
 grid_x = norm.ppf(np.linspace(0.05, 0.95, n))
@@ -131,9 +131,9 @@ for i, yi in enumerate(grid_x):
     for j, xi in enumerate(grid_y):
         z_sample = np.array([[xi, yi]])
         x_decoded = generator.predict(z_sample)
-        digit = x_decoded[0].reshape(digit_size, digit_size)
-        figure[i * digit_size: (i + 1) * digit_size,
-               j * digit_size: (j + 1) * digit_size] = digit
+        digit = x_decoded[0].reshape(m, m)
+        figure[i * m: (i + 1) * m,
+               j * m: (j + 1) * m] = digit
 
 fig = plt.figure(figsize=(10, 10))
 plt.imshow(figure, cmap='Greys_r')
@@ -141,22 +141,21 @@ plt.show()
 fig.savefig('x_{}.png'.format(use_loss))
 
 # data imputation
-figure = np.zeros((digit_size * 3, digit_size * n))
+figure = np.zeros((m * 3, m * n))
 x = x_test[:batch_size,:]
-x_corupted = np.copy(x)
-x_corupted[:, 300:400] = 0
-x_encoded = vae.predict(x_corupted, batch_size=batch_size).reshape((-1, digit_size, digit_size))
-x = x.reshape((-1, digit_size, digit_size))
-x_corupted = x_corupted.reshape((-1, digit_size, digit_size))
+x_corrupted = np.copy(x)
+x_corrupted[:, 300:400] = 0
+x_reconstruted = vae.predict(x_corrupted, batch_size=batch_size).reshape((-1, m, m))
+x = x.reshape((-1, m, m))
+x_corrupted = x_corrupted.reshape((-1, m, m))
 for i in range(n):
-    xi = x[i]
-    xi_c = x_corupted[i]
-    xi_e = x_encoded[i]
-    figure[:digit_size, i * digit_size:(i+1)*digit_size] = xi
-    figure[digit_size:2 * digit_size, i * digit_size:(i+1)*digit_size] = xi_c
-    figure[2 * digit_size:, i * digit_size:(i+1)*digit_size] = xi_e
+    figure[:m,      i*m:(i+1)*m] = x[i]
+    figure[ m:2*m,  i*m:(i+1)*m] = x_corrupted[i]
+    figure[   2*m:, i*m:(i+1)*m] = x_reconstruted[i]
 
 fig = plt.figure(figsize=(10, 10))
 plt.imshow(figure, cmap='Greys_r')
-plt.show()
+plt.title('Image Imputation')
+plt.xticks([])
+plt.yticks(m*np.array([.5,1.5,2.5]),['Original','Corrupt','Re-con'])
 fig.savefig('i_{}.png'.format(use_loss))
