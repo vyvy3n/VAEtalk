@@ -1,4 +1,4 @@
-# VAE-toy
+# VAE-toy-and-talk
 VAE implementation in python
 
 ### Requirements
@@ -14,3 +14,10 @@ Keras
 `vae.py` is a modified version of `vae.py` with more experiment settings.
 
 `exps_diff_latent.py` and `exps_multiple.py` are used for summarizing the experiment results and plotting.
+
+### Corresponding talk on VAE
+
+I have added both pdf file and LaTeX source file of the slides, including：
+
+- Explainnation of VAE & variational inference & variational lower bound\\
+- Toy VAE numerical experiments on MINST
