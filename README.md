@@ -19,5 +19,5 @@ Keras
 
 I have added both pdf file and LaTeX source file of the slides, including：
 
-- Explainnation of VAE & variational inference & variational lower bound\\
+- Explainnation of VAE & variational inference & variational lower bound
 - Toy VAE numerical experiments on MINST
