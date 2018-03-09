@@ -1,6 +1,6 @@
 '''
 Description: to build a variational autoencoder with Keras.
-Reference  : "Auto-Encoding Variational Bayes" https://arxiv.org/abs/1312.6114
+Reference  : "Auto-Encoding Variational Bayes" https://arxiv.org/abs/1312.6114 
 '''
 import os
 import numpy as np
