@@ -1,12 +1,12 @@
 '''
 Description:
-    To summary VAE performance on MINST by multiple experiments.
+    To test the stability of VAE: 
+        A summary of VAE performance on MINST in multiple experiments.
 
 Notes:
-    1. In "saveLossAndVal.csv":
-    each even number line is "loss" of one experiment;
-    each odd number line is "loss_val" of the corresponding experiment;
-    "even/odd" is based on line number starting from 0 (as in python), not 1.
+    1. In "saveLoss_multi.csv":
+    each odd  number line is "loss" of one experiment;
+    each even number line is "loss_val" (validation) of the corresponding experiment;
     
     2. To get results as in "csv/saveLoss_multi.csv", run this in linux shell:
     i=0; while (( $i < 30 )); do python vae.py; ((i=$i+1)); done;
@@ -20,7 +20,7 @@ font = {'family': 'normal',
         'size': 14}
 matplotlib.rc('font', **font)
 
-# read history
+# Read history
 file = open('csv/saveLoss_multi.csv').read().split('\n') 
 num  = int((len(file)-1)/2)
 logs = []
@@ -31,14 +31,15 @@ for i in range(2*num):
     epoch_max = max([len(logs[i]), epoch_max])
     epoch_min = min([len(logs[i]), epoch_min])
 
-#fig = plt.figure(figsize=(8,6))
+fig = plt.figure(figsize=(8,6))
 fig = plt.subplot(111)
-# plotting each experiment
+
+# Plotting each experiment
 for i in range(num):
     plt.plot(logs[2 * i], color='PowderBlue', label='Train')
     plt.plot(logs[2*i+1], color='MistyRose' , label='Test' )
 
-# calculate mean_loss and mean_loss_val
+# Calculate mean_loss and mean_loss_val (validation)
 mean_loss = []
 for v in range(epoch_max):
     loss, n_exps = 0, 0
@@ -60,16 +61,20 @@ for v in range(epoch_max):
         except:
             pass
     mean_loss_val.append(loss/n_exps)
-        
-# plotting mean
+ 
+# Create directory to save the figure
+import os
+if not os.path.exists("./fig"): os.mkdir("./fig")
+
+# Plotting mean
 plt.plot(mean_loss,     color=[.090,.773,.804], label='mean(Train)')
 plt.plot(mean_loss_val, color=[.816,.126,.565], label='mean(Test)')
 plt.title('Model Loss, %s Experiments'%str(num))
 plt.ylabel('Loss' , fontsize=18)
 plt.xlabel('Epoch', fontsize=18)
 handles, labels = fig.get_legend_handles_labels()
-plt.legend(handles[0:2]+handles[::-1][0:2],
-           labels[0:2]+labels[::-1][0:2],  
+plt.legend(handles[0:2]+handles[::-1][0:2][::-1],
+           labels[0:2]+labels[::-1][0:2][::-1],  
            loc='upper right')
-plt.savefig("./fig/loss_{}_exps".format(num), dpi=300)#dpi=1200)
+plt.savefig("./fig/loss_{}_exps".format(num), dpi=300)#dpi=1200
 plt.show()

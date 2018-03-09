@@ -2,16 +2,18 @@
 Description: to build a variational autoencoder with Keras.
 Reference  : "Auto-Encoding Variational Bayes" https://arxiv.org/abs/1312.6114
 '''
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
+import tensorflow as tf
 from keras.layers import Input, Dense, Lambda
 from keras.models import Model
 from keras.regularizers import l2
 from keras import backend as K
 from keras import objectives
-import tensorflow as tf
+from keras.models import load_model
 
 #%% Load data 
 
@@ -21,40 +23,45 @@ import tensorflow as tf
 # by tensorflow
 from tensorflow.examples.tutorials.mnist import input_data
 #or manually download from: http://yann.lecun.com/exdb/mnist/
-mnist = input_data.read_data_sets('MNIST')
-#mnist = input_data.read_data_sets("/home/vivian/VAE/MNIST", one_hot=True)
+mnist = input_data.read_data_sets('./MNIST')
+#mnist = input_data.read_data_sets("./MNIST", one_hot=True)
 x_train = mnist.train.images
 x_test  = mnist.test.images
 y_test  = mnist.test.labels
 
-#%% Build VAE
+#%% Parameters
 
-np.random.seed(0)  #for reproducibility
+np.random.seed(0)     #for reproducibility
 
 dim_x       = x_train.shape[1]
-dim_latent  = 20
+dim_latent  = 2
 dim_hidden  = 256
 batch_size  = 100 
-epochs      = 70
-decay       = 1e-4 # L2 regularization
+epochs      = 50
+decay       = 1e-4    # L2 regularization
 epsilon_std = 1.0
-use_loss    = 'xent' # 'mse'(mean square error) or 'xent'(cross entropy)
+use_loss    = 'xent'  # 'mse'(mean square error) or 'xent'(cross entropy)
 use_bias    = True
 plot_on     = True
 
-##for shell only(start)
+##for shell only
+#____________________________________________________________
 if __name__ == '__main__':
     import sys
     try:
         params = sys.argv[sys.argv.index('vae.py')+1:]
-        try:    dim_latent = int(params[0])
+        try:    
+            dim_latent = int(params[0])
+            plot_on    = False #no plotting when run from the terminal
         except: pass
         try:    dim_hidden = int(params[1]) 
         except: pass
     except:
         pass
 ##for i in {2,3,5,10,15,20}; do python vae.py $i; done
-##for shell only(e n d)
+#____________________________________________________________
+
+#%% Build VAE
 
 ## Encoder
 x = Input(batch_shape=(batch_size, dim_x))
@@ -101,7 +108,21 @@ def loss(x, x_hat):
 
 def loss_kl(x, x_hat):
     return - 0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
-#%% Train the VAE on MNIST Digits
+
+#%% Train the VAE on MNIST Digits || or Load VAE
+
+#modelpath = './save/vae_'+str(dim_latent)
+#
+#try: 
+#    from keras.models import model_from_json
+#    # load json and create model
+#    json_file = open(modelpath+".json", "r")
+#    loaded_model_json = json_file.read()
+#    json_file.close()
+#    vae = model_from_json(loaded_model_json)
+#    # load weights into new model
+#    vae.load_weights(modelpath+".h5")
+#    print("Loaded model from disk")
 
 ## Define Model
 vae = Model(x, x_hat)
@@ -121,7 +142,7 @@ t0 = datetime.now()#timing(start)
 from keras.callbacks import TensorBoard
 tb = TensorBoard(log_dir='./logs', histogram_freq=0, write_graph=True, write_images=True)  
 #to open Tensorboard, direct to the directory of this script in the terminal 
-#and run: Tensorboard --logdir=logs
+#then run: Tensorboard --logdir=logs
 #then visit: http://localhost:6006 in your browser.
 
 vae.fit(x_train, x_train,
@@ -132,6 +153,15 @@ vae.fit(x_train, x_train,
         callbacks=[tb])#callbacks=[early_stopping, tb])
 
 time_use = (datetime.now() - t0).total_seconds() #timing(end)
+
+#os.mkdir("./save/")
+## serialize model to JSON
+#model_json = vae.to_json()
+#with open(modelpath+".json", "w") as json_file:
+#    json_file.write(model_json)
+## serialize weights to HDF5
+#vae.save_weights(modelpath+".h5")
+#print("Saved model to ", modelpath)
 
 #%% Display Training History
 

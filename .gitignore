@@ -1,0 +1,4 @@
+*.png
+MNIST/
+save/
+experiment/
