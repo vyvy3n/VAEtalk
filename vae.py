@@ -109,20 +109,7 @@ def loss(x, x_hat):
 def loss_kl(x, x_hat):
     return - 0.5 * K.sum(1 + z_log_var - K.square(z_mean) - K.exp(z_log_var), axis=-1)
 
-#%% Train the VAE on MNIST Digits || or Load VAE
-
-#modelpath = './save/vae_'+str(dim_latent)
-#
-#try: 
-#    from keras.models import model_from_json
-#    # load json and create model
-#    json_file = open(modelpath+".json", "r")
-#    loaded_model_json = json_file.read()
-#    json_file.close()
-#    vae = model_from_json(loaded_model_json)
-#    # load weights into new model
-#    vae.load_weights(modelpath+".h5")
-#    print("Loaded model from disk")
+#%% Train the VAE on MNIST Digits 
 
 ## Define Model
 vae = Model(x, x_hat)
@@ -153,15 +140,6 @@ vae.fit(x_train, x_train,
         callbacks=[tb])#callbacks=[early_stopping, tb])
 
 time_use = (datetime.now() - t0).total_seconds() #timing(end)
-
-#os.mkdir("./save/")
-## serialize model to JSON
-#model_json = vae.to_json()
-#with open(modelpath+".json", "w") as json_file:
-#    json_file.write(model_json)
-## serialize weights to HDF5
-#vae.save_weights(modelpath+".h5")
-#print("Saved model to ", modelpath)
 
 #%% Display Training History
 
